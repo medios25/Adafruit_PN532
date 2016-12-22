@@ -947,6 +947,93 @@ uint8_t Adafruit_PN532::mifareultralight_ReadPage (uint8_t page, uint8_t * buffe
   return 1;
 }
 
+
+
+
+/***** NTAG2xx Functions ******/
+
+/**************************************************************************/
+/*!
+    Tries to read an entire 4-byte page at the specified address.
+
+    @param  page        The page number (0..63 in most cases)
+    @param  buffer      Pointer to the byte array that will hold the
+                        retrieved data (if any)
+*/
+/**************************************************************************/
+uint8_t Adafruit_PN532::ntag2xx_ReadPage (uint8_t page, uint8_t * buffer)
+{
+  // TAG Type       PAGES   USER START    USER STOP
+  // --------       -----   ----------    ---------
+  // NTAG 203       42      4             39
+  // NTAG 213       45      4             39
+  // NTAG 215       135     4             129
+  // NTAG 216       231     4             225
+
+  if (page >= 231)
+  {
+    #ifdef MIFAREDEBUG
+      Serial.println("Page value out of range");
+    #endif
+    return 0;
+  }
+
+  #ifdef MIFAREDEBUG
+    Serial.print("Reading page ");Serial.println(page);
+  #endif
+
+  /* Prepare the command */
+  pn532_packetbuffer[0] = PN532_COMMAND_INDATAEXCHANGE;
+  pn532_packetbuffer[1] = 1;                   /* Card number */
+  pn532_packetbuffer[2] = MIFARE_CMD_READ;     /* Mifare Read command = 0x30 */
+  pn532_packetbuffer[3] = page;                /* Page Number (0..63 in most cases) */
+
+  /* Send the command */
+  if (! sendCommandCheckAck(pn532_packetbuffer, 4))
+  {
+    #ifdef MIFAREDEBUG
+      Serial.println("Failed to receive ACK for write command");
+    #endif
+    return 0;
+  }
+
+  /* Read the response packet */
+  readdata(pn532_packetbuffer, 26);
+  #ifdef MIFAREDEBUG
+    Serial.println("Received: ");
+    Adafruit_PN532::PrintHexChar(pn532_packetbuffer, 26);
+  #endif
+
+  /* If byte 8 isn't 0x00 we probably have an error */
+  if (pn532_packetbuffer[7] == 0x00)
+  {
+    /* Copy the 4 data bytes to the output buffer         */
+    /* Block content starts at byte 9 of a valid response */
+    /* Note that the command actually reads 16 byte or 4  */
+    /* pages at a time ... we simply discard the last 12  */
+    /* bytes                                              */
+    memcpy (buffer, pn532_packetbuffer+8, 4);
+  }
+  else
+  {
+    #ifdef MIFAREDEBUG
+      Serial.println("Unexpected response reading block: ");
+      Adafruit_PN532::PrintHexChar(pn532_packetbuffer, 26);
+    #endif
+    return 0;
+  }
+
+  /* Display data for debug if requested */
+  #ifdef MIFAREDEBUG
+    Serial.print("Page ");Serial.print(page);Serial.println(":");
+    Adafruit_PN532::PrintHexChar(buffer, 4);
+  #endif
+
+  // Return OK signal
+  return 1;
+}
+
+
 /************** high level SPI/I2C */
 
 /**************************************************************************/
